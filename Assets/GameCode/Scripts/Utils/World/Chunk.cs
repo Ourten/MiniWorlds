@@ -7,16 +7,16 @@ namespace GameCode.Scripts.Utils.World
         public const int SIZE = 16;
 
         private short[,,] data;
-        private readonly World _world;
+        private readonly Planet _planet;
         public int ChunkX { get; }
         public int ChunkY { get; }
         public int ChunkZ { get; }
 
-        public Chunk(World world, int chunkX, int chunkY, int chunkZ)
+        public Chunk(Planet planet, int chunkX, int chunkY, int chunkZ)
         {
             data = new short[SIZE, SIZE, SIZE];
 
-            _world = world;
+            _planet = planet;
             ChunkX = chunkX;
             ChunkY = chunkY;
             ChunkZ = chunkZ;

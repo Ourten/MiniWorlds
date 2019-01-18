@@ -19,6 +19,11 @@ namespace GameCode.Utils.Mesh
             Triangles = triangles;
         }
 
+        public UnityEngine.Mesh ToUnityMesh()
+        {
+            return new UnityEngine.Mesh {vertices = Vertices, triangles = Triangles, colors32 = Colors};
+        }
+
         public static MeshData operator +(MeshData first, MeshData second)
         {
             var mergedTriangles = new int[first.Triangles.Length + second.Triangles.Length];

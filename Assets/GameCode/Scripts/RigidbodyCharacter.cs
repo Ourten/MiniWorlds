@@ -1,4 +1,6 @@
-﻿using UnityEngine;
+﻿using GameCode.Scripts.Gui;
+using GameCode.Scripts.Inputs;
+using UnityEngine;
 
 
 public class RigidbodyCharacter : MonoBehaviour
@@ -25,6 +27,9 @@ public class RigidbodyCharacter : MonoBehaviour
         _isGrounded = Physics.CheckSphere(_groundChecker.position, GroundDistance, Ground,
             QueryTriggerInteraction.Ignore);
 
+        if (GuiManager.Instance.IsAnyGuiOpen() || !InputService.Singleton.IsCursorLocked)
+            return;
+
         _inputs = Vector3.zero;
         _inputs.x = Input.GetAxis("Horizontal");
         _inputs.z = Input.GetAxis("Vertical");
@@ -36,7 +41,7 @@ public class RigidbodyCharacter : MonoBehaviour
 
         if (Input.GetButtonDown("Dash"))
         {
-            Vector3 dashVelocity = Vector3.Scale(transform.forward,
+            var dashVelocity = Vector3.Scale(transform.forward,
                 DashDistance * new Vector3((Mathf.Log(1f / (Time.deltaTime * _body.drag + 1)) / -Time.deltaTime), 0,
                     (Mathf.Log(1f / (Time.deltaTime * _body.drag + 1)) / -Time.deltaTime)));
             _body.AddForce(dashVelocity, ForceMode.VelocityChange);

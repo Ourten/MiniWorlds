@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using GameCode.Scripts.Utils.Mesh;
 using GameCode.Scripts.Utils.World;
 using UnityEngine;
+using UnityEngine.UI;
 using Debug = UnityEngine.Debug;
 
 public class TerrainGenerator : MonoBehaviour
@@ -14,72 +15,68 @@ public class TerrainGenerator : MonoBehaviour
     public int mapSize = 512;
     public int viewRadius = 8;
     public GameObject player;
-    public bool meshAll = false;
+    public bool meshAll;
+    public Text textStatus;
 
     private Vector3Int playerLastChunk;
 
-    private World world;
+    private Planet _planet;
 
     private GameObject _mainGameObject;
     private Dictionary<ChunkView, GameObject> meshedChunks;
+
+    private GenerationState _genState;
 
     // Start is called before the first frame update
     void Start()
     {
         if (mapSize < viewRadius * 16)
-            throw new ArgumentException(nameof(mapSize) + "(" + mapSize + ") cannot be inferior to the " +
-                                        nameof(viewRadius) + "(" + viewRadius * 16 + ")");
+            throw new ArgumentException(nameof(mapSize) + " (" + mapSize + ") cannot be inferior to the " +
+                                        nameof(viewRadius) + " (" + viewRadius * 16 + ")");
 
-        world = new World(mapSize);
+        World.Instance.AddPlanet("Spawn", mapSize, new PlanetConfig());
+        _planet = World.Instance.GetPlanet("Spawn");
+
         _mainGameObject = new GameObject();
         meshedChunks = new Dictionary<ChunkView, GameObject>();
 
-        var watch = Stopwatch.StartNew();
-        watch.Start();
-        WorldGenerator.GenerateWorld(world);
-
-        watch.Stop();
-        Debug.Log("Generation done in " + watch.ElapsedMilliseconds + "ms");
-
         if (!meshAll)
-            return;
-
-        Task.Run(() =>
-        {
-            world.GetChunks().AsParallel().AsOrdered().ForAll(chunk =>
+            _genState = _planet.GeneratePlanet(null);
+        else
+            _genState = _planet.GeneratePlanet(() =>
             {
-                var meshData = MeshCreator.ReduceMesh(chunk);
-
-                world.VerticesCount = meshData.Vertices.Length;
-                world.TrianglesCount = meshData.Triangles.Length;
-
-                UnityMainThreadDispatcher.Instance().Enqueue(() =>
+                _planet.GetChunks().AsParallel().AsOrdered().ForAll(chunk =>
                 {
-                    var childGameObject = new GameObject("Grid ");
-                    childGameObject.AddComponent<MeshFilter>();
-                    childGameObject.AddComponent<MeshRenderer>();
+                    var meshData = MeshCreator.ReduceMesh(chunk);
 
-                    childGameObject.GetComponent<MeshRenderer>().material.shader = Shader.Find("Custom/StandardColor");
-                    childGameObject.isStatic = true;
-                    childGameObject.transform.parent = _mainGameObject.transform.parent;
-                    childGameObject.transform.Translate(new Vector3(chunk.ChunkX, chunk.ChunkY, chunk.ChunkZ) *
-                                                        Chunk.SIZE);
+                    UnityMainThreadDispatcher.Instance().Enqueue(() =>
+                    {
+                        var childGameObject = new GameObject("Grid ");
+                        childGameObject.AddComponent<MeshFilter>();
+                        childGameObject.AddComponent<MeshRenderer>();
 
-                    Mesh mesh;
-                    childGameObject.GetComponent<MeshFilter>().mesh = mesh = new Mesh();
-                    mesh.name = "Procedural Grid " + chunk.ChunkX + "x" + chunk.ChunkZ;
+                        childGameObject.GetComponent<MeshRenderer>().material.shader =
+                            Shader.Find("Custom/StandardColor");
+                        childGameObject.isStatic = true;
+                        childGameObject.transform.parent = _mainGameObject.transform.parent;
+                        childGameObject.transform.Translate(new Vector3(chunk.ChunkX, chunk.ChunkY, chunk.ChunkZ) *
+                                                            Chunk.SIZE);
 
-                    mesh.vertices = meshData.Vertices;
-                    mesh.colors32 = meshData.Colors;
-                    mesh.triangles = meshData.Triangles;
+                        Mesh mesh;
+                        childGameObject.GetComponent<MeshFilter>().mesh = mesh = new Mesh();
+                        mesh.name = "Procedural Grid " + chunk.ChunkX + "x" + chunk.ChunkZ;
 
-                    mesh.RecalculateNormals();
-                    mesh.RecalculateBounds();
+                        mesh.vertices = meshData.Vertices;
+                        mesh.colors32 = meshData.Colors;
+                        mesh.triangles = meshData.Triangles;
 
-                    childGameObject.AddComponent<MeshCollider>();
+                        mesh.RecalculateNormals();
+                        mesh.RecalculateBounds();
+
+                        childGameObject.AddComponent<MeshCollider>();
+                    });
                 });
             });
-        });
     }
 
     private void ShiftWorld(Vector3 toShift)
@@ -93,6 +90,18 @@ public class TerrainGenerator : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+        Time.timeScale = 0;
+
+        if (!_genState.IsFinished)
+        {
+            textStatus.text =
+                $"Creating World...\nStep {_genState.CurrentStep + 1} of {_genState.MaxStep}\n{_genState.StepDesc} : {(float) _genState.CurrentStepProgress / _genState.CurrentStepMaxProgress:P}";
+            return;
+        }
+
+        textStatus.text = "";
+        Time.timeScale = 1;
+
         if (meshAll)
             return;
 
@@ -100,13 +109,13 @@ public class TerrainGenerator : MonoBehaviour
         var playerCurrentChunk = Vector3Int.RoundToInt(playerPos / 16);
 
         if (playerPos.x < 0)
-            ShiftWorld(new Vector3(world.Size, 0, 0));
+            ShiftWorld(new Vector3(_planet.Size, 0, 0));
         if (playerPos.z < 0)
-            ShiftWorld(new Vector3(0, 0, world.Size));
-        if (playerPos.x >= world.Size)
-            ShiftWorld(new Vector3(-world.Size, 0, 0));
-        if (playerPos.z >= world.Size)
-            ShiftWorld(new Vector3(0, 0, -world.Size));
+            ShiftWorld(new Vector3(0, 0, _planet.Size));
+        if (playerPos.x >= _planet.Size)
+            ShiftWorld(new Vector3(-_planet.Size, 0, 0));
+        if (playerPos.z >= _planet.Size)
+            ShiftWorld(new Vector3(0, 0, -_planet.Size));
 
         if (playerCurrentChunk.Equals(playerLastChunk))
             return;
@@ -115,7 +124,7 @@ public class TerrainGenerator : MonoBehaviour
         watch.Start();
         playerLastChunk = playerCurrentChunk;
 
-        var chunkList = world.GetChunksAround(playerCurrentChunk, viewRadius);
+        var chunkList = _planet.GetChunksAround(playerCurrentChunk, viewRadius);
         var toEvict = new BlockingCollection<ChunkView>();
         var notAdded = new BlockingCollection<ChunkView>();
 
@@ -148,9 +157,6 @@ public class TerrainGenerator : MonoBehaviour
             chunkList.AsParallel().AsOrdered().ForAll(chunkView =>
             {
                 var meshData = MeshCreator.ReduceMesh(chunkView.Chunk);
-
-                world.VerticesCount = meshData.Vertices.Length;
-                world.TrianglesCount = meshData.Triangles.Length;
 
                 UnityMainThreadDispatcher.Instance().Enqueue(() =>
                 {

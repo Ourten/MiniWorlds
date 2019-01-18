@@ -38,7 +38,7 @@ namespace GameCode.Scripts.Utils.Mesh
         public static MeshData ReduceMesh(Chunk chunk)
         {
             var vertices = new List<Vector3>();
-            var elements = new List<int>();
+            var triangles = new List<int>();
             var colors = new List<Color32>();
 
             const int size = Chunk.SIZE;
@@ -131,11 +131,11 @@ namespace GameCode.Scripts.Utils.Mesh
                                 var floor = v1.y == 0 && v2.y == 0 && v3.y == 0 && v4.y == v1.y;
 
                                 if (c >= 1 && !floor)
-                                    AddFace(chunk, v1, v2, v3, v4, c, vertices, elements, colors);
+                                    AddFace(chunk, v1, v2, v3, v4, c, vertices, triangles, colors);
 
                                 if (flip)
                                 {
-                                    AddFace(chunk, v4, v3, v2, v1, c, vertices, elements, colors);
+                                    AddFace(chunk, v4, v3, v2, v1, c, vertices, triangles, colors);
                                 }
 
                                 for (l = 0; l < h; ++l)
@@ -157,7 +157,7 @@ namespace GameCode.Scripts.Utils.Mesh
                 }
             }
 
-            return new MeshData(vertices.ToArray(), colors.ToArray(), elements.ToArray());
+            return new MeshData(vertices.ToArray(), colors.ToArray(), triangles.ToArray());
         }
 
 
