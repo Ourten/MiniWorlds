@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using GameCode.Scripts.Utils.World.Biome;
 
 namespace GameCode.Scripts.Utils.World
 {
@@ -21,6 +22,11 @@ namespace GameCode.Scripts.Utils.World
             planet.HeightMap = heightMap;
             
             state.CloseStep();
+            state.InitStep("Biomes Generation", (int) Math.Pow((double) planet.Size / Chunk.SIZE, 2));            
+            planet.MoistureMap = CreatePlanetMoistureMap(planet.Size, new Random().Next(), state);
+            planet.BiomeMap = new short[planet.Size, planet.Size];
+
+            state.CloseStep();
             state.InitStep("Block Filling", (int) Math.Pow((double) planet.Size / Chunk.SIZE, 2));
 
             Enumerable.Range(0, (int) Math.Pow((double) planet.Size / Chunk.SIZE, 2)).AsParallel().AsOrdered().ForAll(
@@ -35,8 +41,12 @@ namespace GameCode.Scripts.Utils.World
                         {
                             var posX = x + chunkX;
                             var posZ = z + chunkY;
-                            planet.SetArea(posX, 0, posZ, posX, heightMap[posX, posZ] - 1, posZ, 1);
-                            planet.SetBlock(posX, heightMap[posX, posZ], posZ, 2);
+
+                            var biomeID = Biomes.GetBiome(heightMap[posX, posZ], planet.MoistureMap[posX, posZ]).ID;
+                            planet.BiomeMap[posX, posZ] = biomeID;
+
+                            planet.SetArea(posX, 0, posZ, posX, heightMap[posX, posZ] - 1, posZ, (short) (biomeID + 1));
+                            planet.SetBlock(posX, heightMap[posX, posZ], posZ, (short) (biomeID + 1));
                         }
                     }
 
@@ -51,7 +61,8 @@ namespace GameCode.Scripts.Utils.World
                 Enumerable.Range(0, (int) Math.Pow((double) size / Chunk.SIZE, 2)).AsParallel().AsOrdered()
                     .Select(chunkIndex =>
                     {
-                        var mapPart = GenMap(size, chunkIndex, Chunk.SIZE, seed);
+                        var mapPart = GenMap(size, chunkIndex, Chunk.SIZE, seed,
+                            value => (int) Math.Min(value * 10 + 16, 255));
                         state.UpdateStep(1);
                         return mapPart;
                     })
@@ -60,9 +71,25 @@ namespace GameCode.Scripts.Utils.World
             return planetHeightMap;
         }
 
-        private static int[,] JoinHeightMaps(IReadOnlyList<int[,]> maps, int size)
+        private static float[,] CreatePlanetMoistureMap(int size, int seed, GenerationState state)
         {
-            var heightMap = new int[size, size];
+            var planetMoistureMap = JoinHeightMaps(
+                Enumerable.Range(0, (int) Math.Pow((double) size / Chunk.SIZE, 2)).AsParallel().AsOrdered()
+                    .Select(chunkIndex =>
+                    {
+                        var mapPart = GenMap(size, chunkIndex, Chunk.SIZE, seed,
+                            value => (value + 1) /2);
+                        state.UpdateStep(1);
+                        return mapPart;
+                    })
+                    .ToList(), size);
+
+            return planetMoistureMap;
+        }
+
+        private static T[,] JoinHeightMaps<T>(IReadOnlyList<T[,]> maps, int size)
+        {
+            var heightMap = new T[size, size];
 
             for (var index = 0; index < maps.Count; index++)
             {
@@ -79,10 +106,10 @@ namespace GameCode.Scripts.Utils.World
             return heightMap;
         }
 
-
-        private static int[,] GenMap(int size, int chunkIndex, int chunkSize, int seed)
+        private static T[,] GenMap<T>(int size, int chunkIndex, int chunkSize, int seed,
+            Func<float, T> valueTransformer)
         {
-            var heightMap = new int[chunkSize, chunkSize];
+            var heightMap = new T[chunkSize, chunkSize];
             var chunkX = chunkIndex % (size / chunkSize) * chunkSize;
             var chunkY = chunkIndex / (size / chunkSize) * chunkSize;
 
@@ -99,14 +126,14 @@ namespace GameCode.Scripts.Utils.World
                     var s = (float) (chunkX + x) / size;
                     var t = (float) (chunkY + y) / size;
 
-                    var nx = x1 + Math.Cos(s * 2 * Math.PI) * dx / (2 * Math.PI);
-                    var ny = y1 + Math.Cos(t * 2 * Math.PI) * dy / (2 * Math.PI);
-                    var nz = x1 + Math.Sin(s * 2 * Math.PI) * dx / (2 * Math.PI);
-                    var nw = y1 + Math.Sin(t * 2 * Math.PI) * dy / (2 * Math.PI);
+                    var nx = (float) (x1 + Math.Cos(s * 2 * Math.PI) * dx / (2 * Math.PI));
+                    var ny = (float) (y1 + Math.Cos(t * 2 * Math.PI) * dy / (2 * Math.PI));
+                    var nz = (float) (x1 + Math.Sin(s * 2 * Math.PI) * dx / (2 * Math.PI));
+                    var nw = (float) (y1 + Math.Sin(t * 2 * Math.PI) * dy / (2 * Math.PI));
 
-                    heightMap[x, y] = Math.Min(
-                        (int) (_noise.GetSimplex((float) nx, (float) ny, (float) nz, (float) nw) * 10) +
-                        16, 255);
+                    heightMap[x, y] = valueTransformer.Invoke(
+                        _noise.GetSimplex(0.25f * nx, 0.25f * ny, 0.25f * nz, 0.25f * nw) /*
+                        + 0.5f * _noise.GetSimplex(nx, ny, nz, nw)*/);
                 }
             }
 

@@ -31,6 +31,8 @@ namespace GameCode.Scripts.Utils.World
         private readonly PlanetConfig _config;
 
         public int[,] HeightMap { get; set; }
+        public float[,] MoistureMap { get; set; }
+        public short[,] BiomeMap { get; set; }        
 
         public Planet(string name, int size, PlanetConfig config)
         {
@@ -52,7 +54,7 @@ namespace GameCode.Scripts.Utils.World
         public GenerationState GeneratePlanet(Action afterGen)
         {
             var state = new GenerationState();
-            state.Init(2);
+            state.Init(3);
 
             var continuedTask = Task.Run(() =>
                 {
@@ -200,14 +202,7 @@ namespace GameCode.Scripts.Utils.World
 
         public Biome.Biome GetBiomeAt(int x, int z)
         {
-            // TODO : Link biomes map
-            if (x % 2 == 0 && z % 2 == 0)
-                return Biomes.PLAIN;
-            if (x % 3 == 0)
-                return Biomes.DESERT;
-            if (z % 5 == 0)
-                return Biomes.RAIN_FOREST;
-            return Biomes.FOREST;
+            return Biomes.ByID(BiomeMap[x, z]);
         }
     }
 }

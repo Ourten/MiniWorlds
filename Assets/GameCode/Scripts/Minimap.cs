@@ -28,7 +28,8 @@ public class Minimap : MonoBehaviour, IGui
     {
     }
 
-    private readonly Color32[] _gradient = {new Color32(226, 234, 4, 255), new Color32(234, 23, 4, 255)};
+    private readonly Color32[] _elevationGradient = {new Color32(226, 234, 4, 255), new Color32(234, 23, 4, 255)};
+    private readonly Color32[] _moistureGradient = {new Color32(161, 196, 252, 255), new Color32(66, 134, 244, 255)};
 
     public void OnOpen()
     {
@@ -60,9 +61,23 @@ public class Minimap : MonoBehaviour, IGui
             for (var x = 0; x < ratio; x++)
             {
                 for (var y = 0; y < ratio; y++)
-                    colors.Add(Color32.Lerp(_gradient[0], _gradient[1],
+                    colors.Add(Color32.Lerp(_elevationGradient[0], _elevationGradient[1],
                         (float) (planet.GetHeightAt(pos.x * ratio + x, pos.y * ratio + y) - lowest) /
                         (hightest - lowest)));
+            }
+
+            return ColorUtils.GetAverageRGB(colors);
+        }
+
+        Color32 MoistureColorSupplier(Vector2Int pos)
+        {
+            var colors = new List<Color32>();
+
+            for (var x = 0; x < ratio; x++)
+            {
+                for (var y = 0; y < ratio; y++)
+                    colors.Add(Color32.Lerp(_moistureGradient[0], _moistureGradient[1],
+                        planet.MoistureMap[pos.x * ratio + x, pos.y * ratio + y]));
             }
 
             return ColorUtils.GetAverageRGB(colors);
@@ -76,7 +91,7 @@ public class Minimap : MonoBehaviour, IGui
 
                 var mesh = MeshGrid2D.GetMeshGrid(new Vector2Int(-256 + column * 128, -256 + row * 128),
                         new Vector2Int(planet.Size / ratio / 4 * column, planet.Size / ratio / 4 * row),
-                        64, 2, ElevationColorSupplier)
+                        64, 2, BiomeColorSupplier)
                     .ToUnityMesh();
 
                 mapPart.AddComponent<CanvasRenderer>().SetMesh(mesh);

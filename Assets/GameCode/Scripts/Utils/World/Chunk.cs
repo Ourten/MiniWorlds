@@ -1,3 +1,4 @@
+using GameCode.Scripts.Utils.World.Biome;
 using UnityEngine;
 
 namespace GameCode.Scripts.Utils.World
@@ -54,7 +55,7 @@ namespace GameCode.Scripts.Utils.World
 
         public Color32 GetBlockColor(short blockType)
         {
-            return colors[blockType];
+            return Biomes.ByID((short) (blockType - 1)).Color;
         }
     }
 }
